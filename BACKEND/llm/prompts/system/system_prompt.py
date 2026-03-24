@@ -1,1 +1,0 @@
-system_check_prompt = "Hello !"

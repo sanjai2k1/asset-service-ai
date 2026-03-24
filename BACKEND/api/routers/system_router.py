@@ -20,7 +20,7 @@ async def health():
 async def db_health():
     return await RestHelper.execute(system_service.db_health)
 
-@router.get("/llmhealth", response_model=LLMHealthResponse)
+@router.get("/llmhealth")
 async def llm_health():
     return await RestHelper.execute(system_service.llm_health)
 

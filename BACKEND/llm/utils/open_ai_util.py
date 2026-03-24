@@ -1,6 +1,8 @@
 import tiktoken
 from openai import OpenAI
 from config.settings import settings
+import time
+
 class OpenAI_LLMUtil:
 
     def __init__(self, llm_url: str, llm_key: str, llm_model: str, encoding_name="cl100k_base"):
@@ -221,5 +223,43 @@ class OpenAI_LLMUtil:
             "content": assistant_content,
             "messages": None,
 
+            "usage": usage
+        }
+    def generate(self, chat_messages: list[dict]) -> dict:
+        """
+        Minimal OpenAI call for chat completion.
+        Returns the assistant content and token usage.
+        """
+
+        # Prepare messages (only current prompt, no memory)
+        start_time = time.time()
+        # Call OpenAI
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=chat_messages,
+            temperature=0
+        )
+        end_time = time.time()
+        time_taken = end_time - start_time
+        # Get assistant content
+        choice = response.choices[0].message
+        assistant_content = getattr(choice, "content", "")
+
+        # Fallback if content missing (tool calls etc.)
+        if not assistant_content:
+            if hasattr(choice, "tool_calls") and choice.tool_calls:
+                assistant_content = str(choice.tool_calls)
+
+        # Token usage
+        usage = {
+            "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
+            "completion_tokens": getattr(response.usage, "completion_tokens", 0),
+            "total_tokens": getattr(response.usage, "total_tokens", 0),
+            "time_taken_sec": round(time_taken, 3)  
+
+        }
+
+        return {
+            "content": assistant_content,
             "usage": usage
         }

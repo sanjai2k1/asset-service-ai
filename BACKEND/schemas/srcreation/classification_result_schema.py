@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List,Dict,Any
 from schemas.system.system_schema import UsageSchema,LLMHealthResponse
 
 class LLMResponseDetails(LLMHealthResponse):
@@ -14,7 +14,7 @@ class ClassificationResultAskResponse(BaseModel):
     missing_fields: List[str] = []                 # list of missing mandatory field names
     is_mandatory_fields_complete: bool = False        # True if all mandatory fields are filled
     needs_clarification: bool = False
-    
+    collect_details : Dict[str,Any] = {}
 class ClassificationResult(BaseModel):
     service: Optional[str] = None
     request_type: Optional[str] = None
@@ -22,19 +22,24 @@ class ClassificationResult(BaseModel):
     confidence: Optional[float] = None
     llm_response_dets : Optional[LLMResponseDetails] = None
 class MandatoryFieldsResponse(BaseModel):
-    missing_fields: List[str] = []                 # list of missing mandatory field names
-    clarification_question: Optional[str]     # polite question or None
+    clarification_question: Optional[str] = None    # polite question or None
     is_mandatory_fields_complete: bool = False        # True if all mandatory fields are filled
     needs_clarification: bool
     llm_response_dets : Optional[LLMResponseDetails] = None
-    extracted_fields : List[str] = []
+    extracted_data : Optional[str] =None
 
 
+
+
+class Message(BaseModel):
+    role: str
+    content: str
+    tokens: int 
 class ClassificationState(BaseModel):
     missing_fields: List[str] = []
     # ---- User Input ----
     request_type: Optional[str] = None
-    request : str
+    request : str = ""
     # ---- Prompt Data (from DB) ----
     service: Optional[str] = None
     typesofrequests: Optional[str] = None
@@ -58,10 +63,10 @@ class ClassificationState(BaseModel):
     # ---- Loop Control ----
     retry_count: int = 0
     max_retries: int = 1
-
-    # ---- History ----
-    conversation_history: List[str] = Field(default_factory=list)
-
+    extracted_data :Optional[str] = None
+    conversation: List[Dict[str, Any]] = []
+    user_requests: List[str] = []
+    collect_details : Dict[str, Any] = {}
     # ---- Error Handling ----
     error: Optional[str] = None
 
@@ -69,6 +74,7 @@ class ClassificationState(BaseModel):
 
 
 
-class AskRequestResponse(BaseModel):
+class AskRequest(BaseModel):
     thread_id: Optional[str] = None
     request: str
+

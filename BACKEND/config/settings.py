@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     db_user: str = Field(..., env="DB_USER")
     db_pass: str = Field(..., env="DB_PASS")
     db_driver: str = Field("ODBC Driver 18 for SQL Server", env="DB_DRIVER")
-
+    allowed_origins: list[str] = Field(default=["*"], env="ALLOWED_ORIGINS")
     @property
     def db_connection_string(self) -> str:
         # return (

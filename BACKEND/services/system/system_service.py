@@ -1,10 +1,8 @@
 import asyncio
 from sqlalchemy import text
 from db.session import engine
-from llm.graphs.system.system_graph import build_graph
 from llm.utils.InMemoryMessasageUtil import InMemoryCache
-
-graph = build_graph()
+from domain.system.chains import system_chain
 
 
 class SystemService:
@@ -25,7 +23,6 @@ class SystemService:
         except Exception as e:
             return {"db": f"unreachable ({str(e)})"}
     async def llm_health(self):
-        thread_id = InMemoryCache.create_thread_id()
-        result = await graph.ainvoke({},config=InMemoryCache.get_config(thread_id))
+        result = system_chain.make_llm_call()
 
         return result

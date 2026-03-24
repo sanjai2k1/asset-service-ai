@@ -1,47 +1,37 @@
 import asyncio
 from sqlalchemy import text
 from db.session import engine
-from llm.graphs.srcreation.srcreation_graph import build_graph
+# from llm.graphs.srcreation.srcreation_graph import build_graph
+from domain.service_request_creation.graphs.sr_classify_graph import build_graph
 from schemas.srcreation.classification_result_schema import ClassificationState
 from llm.utils.InMemoryMessasageUtil import InMemoryCache
+from llm.utils.check_pointer_util import CheckpointUtil
+
+
 graph = build_graph()
 
 
 class SrCreationService: 
-    # async def sr_create(self,thread_id,request):
-    #     if thread_id is None:
-    #         thread_id = CheckpointUtil.create_thread_id()
-    #     state = ClassificationState(
-    #     request=request
-    #     )
-    #     print(CheckpointUtil.get_config(thread_id))
-    #     config = CheckpointUtil.get_config(thread_id)
-    #     check_state = await graph.aget_state(config)
-    #     print(check_state)
-    #     result = await graph.ainvoke(state.model_dump(),config=CheckpointUtil.get_config(thread_id))
-    #     print(result)
-    #     print("-----service--")
-    #     return result
+ 
     async def sr_create(self, thread_id, request):
-        if thread_id is None:
-            thread_id = InMemoryCache.create_thread_id()
 
-        config = InMemoryCache.get_config(thread_id)
+        if thread_id is None or not thread_id:
+            thread_id = CheckpointUtil.create_thread_id()
 
-        # ❌ NO manual save here
-        # ❌ NO assistant save here
+        config = CheckpointUtil.get_config(thread_id)
+        result = await graph.ainvoke({
+            "request": request
+        },
+            config=config)
+        if result["is_classification_complete"] and result["is_mandatory_fields_complete"]:
+            return {
+                "thread_id" : result["thread_id"],
+                "aiMessage": {"content": result["final_summary"]},
+                "issrcreated" : True}
 
-        # ✅ Load memory only
-        state = InMemoryCache.get_state(thread_id,state_cls=ClassificationState,
-    request=request)
+        return {
+            "thread_id" : result["thread_id"],
 
-        
-        result = await graph.ainvoke(
-            state,
-            config=config
-        )
-
-        print(result)
-        print("-----service--")
-
-        return result
+            "aiMessage": {"content": result["clarification_question"]},
+            "issrcreated" : False
+            }

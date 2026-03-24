@@ -1,0 +1,35 @@
+from typing import TypedDict, Optional,Annotated,List,Dict
+from operator import add
+from pydantic import BaseModel, Field
+class State(TypedDict, total=False):
+    user_reqs: Annotated[List[str], add]
+    service_type: Optional[str]
+    request_type: Optional[str]
+    thread_id : Optional[str]
+    final_summary : Optional[str]
+
+    request : str
+    service : Optional[str]
+    clarification_question: Optional[str] = None
+    is_classification_complete : bool = False
+    is_mandatory_fields_complete : bool = False
+    messages: Annotated[List[Dict], add]
+    data: Dict[str, Optional[str]] = {}
+    missing_fields: List[str] = []
+class ClassificationResult(BaseModel):
+    service: Optional[str] = None
+    request_type: Optional[str] = None
+    clarification_question: Optional[str] = None
+    confidence: Optional[float] = None
+    is_request_complete : bool = False
+    needs_clarification : bool = False
+
+
+class FinalSummary(BaseModel):
+    final_summary : str
+
+class MandatoryExtractionResult(BaseModel):
+    is_complete: bool = False
+    data: Dict[str, Optional[str]] = {}
+    missing_fields: List[str] = []
+    clarification_question: Optional[str] = None

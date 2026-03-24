@@ -3,7 +3,7 @@ from core.rest_helper import RestHelper
 from services.srcreation.srcreation_service import SrCreationService
 from fastapi import Body
 
-from  schemas.srcreation.classification_result_schema import ClassificationResult,AskRequestResponse,ClassificationResultAskResponse
+from  schemas.srcreation.classification_result_schema import ClassificationResult,AskRequest,ClassificationResultAskResponse
 
 from typing import List
 router = APIRouter(
@@ -14,9 +14,9 @@ router = APIRouter(
 srcreation_service = SrCreationService()
 
 
-@router.post("/ask", response_model=ClassificationResultAskResponse)
-async def ask( request: str  ,
-    thread_id: str | None = None ):
-    return await RestHelper.execute(srcreation_service.sr_create,thread_id,request)
+# @router.post("/ask", response_model=ClassificationResultAskResponse)
+@router.post("/ask")
+async def ask(data: AskRequest):
+    return await RestHelper.execute(srcreation_service.sr_create,data.thread_id,data.request)
 
 
