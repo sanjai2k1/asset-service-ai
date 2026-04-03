@@ -7,103 +7,103 @@ from sqlalchemy import text
 
 class PromptKeyDependencyRepository:
 
-    def __init__(self):
-        self.db = SessionLocal()
+    # ❌ REMOVE __init__ completely (no shared session)
 
+    def create(self, prompt_key_id: int, parent_id: int | None = None, is_parent: bool = False, uasge_description_dep: str | None = None):
+        with SessionLocal() as db:
+            record = PromptKeyDependency(
+                prompt_key_id=prompt_key_id,
+                parent_id=parent_id,
+                is_parent=is_parent,
+                created_at=datetime.utcnow(),
+                uasge_description_dep=uasge_description_dep
+            )
+            db.add(record)
+            db.commit()
+            db.refresh(record)
+            return record
 
-    # CREATE
-    def create(self, prompt_key_id: int, parent_id: int | None, is_parent: bool):
-        record = PromptKeyDependency(
-            prompt_key_id=prompt_key_id,
-            parent_id=parent_id,
-            is_parent=is_parent,
-            created_at=datetime.utcnow()
-        )
-
-        self.db.add(record)
-        self.db.commit()
-        self.db.refresh(record)
-
-        return record
-
-
-    # GET BY ID
     def get_by_id(self, record_id: int):
-        return (
-            self.db.query(PromptKeyDependency)
-            .filter(PromptKeyDependency.id == record_id)
-            .first()
-        )
+        with SessionLocal() as db:
+            return db.query(PromptKeyDependency).filter(
+                PromptKeyDependency.id == record_id
+            ).first()
+
+    def get_all(self):
+        with SessionLocal() as db:
+            return db.query(PromptKeyDependency).all()
 
     def get_all_by_parent_id(self, parent_id: int):
-        query = (
-            self.db.query(PromptKeyDependency, PromptTemplateVariable)
-            .join(
-                PromptTemplateVariable,
-                PromptKeyDependency.prompt_key_id == PromptTemplateVariable.id
+        with SessionLocal() as db:
+            return (
+                db.query(PromptKeyDependency, PromptTemplateVariable)
+                .join(
+                    PromptTemplateVariable,
+                    PromptKeyDependency.prompt_key_id == PromptTemplateVariable.id
+                )
+                .filter(PromptKeyDependency.parent_id == parent_id)
+                .all()
             )
-            .filter(PromptKeyDependency.parent_id == parent_id)
-        )
-        
-        # Execute and return the list
-        return query
-    # GET ALL
-    def get_all(self):
-        return self.db.query(PromptKeyDependency).all()
 
-
-    # GET BY PROMPT KEY
     def get_by_prompt_key(self, prompt_key_id: int):
-        return (
-            self.db.query(PromptKeyDependency)
-            .filter(PromptKeyDependency.prompt_key_id == prompt_key_id)
-            .all()
-        )
+        with SessionLocal() as db:
+            return (
+                db.query(PromptKeyDependency)
+                .filter(PromptKeyDependency.prompt_key_id == prompt_key_id)
+                .all()
+            )
 
+    def update(self, record_id: int, parent_id: int | None = None, is_parent: bool | None = None, uasge_description_dep: str | None = None):
+        with SessionLocal() as db:
+            record = db.query(PromptKeyDependency).filter(
+                PromptKeyDependency.id == record_id
+            ).first()
 
-    # UPDATE
-    def update(self, record_id: int, parent_id: int | None = None, is_parent: bool | None = None,uasge_description_dep : str |None = None):
+            if not record:
+                return None
 
-        record = self.get_by_id(record_id)
+            if parent_id is not None:
+                record.parent_id = parent_id
+            if is_parent is not None:
+                record.is_parent = is_parent
+            if uasge_description_dep is not None:
+                record.uasge_description_dep = uasge_description_dep
 
-        if not record:
-            return None
+            record.updated_at = datetime.utcnow()
 
-        if parent_id is not None:
-            record.parent_id = parent_id
+            try:
+                db.commit()
+                db.refresh(record)
+            except:
+                db.rollback()
+                raise
 
-        if is_parent is not None:
-            record.is_parent = is_parent
-        if uasge_description_dep is not None:
-            record.uasge_description_dep = uasge_description_dep
+            return record
 
-        record.updated_at = datetime.utcnow()
-
-        self.db.commit()
-        self.db.refresh(record)
-
-        return record
-
-
-    # DELETE
     def delete(self, record_id: int):
+        with SessionLocal() as db:
+            record = db.query(PromptKeyDependency).filter(
+                PromptKeyDependency.id == record_id
+            ).first()
 
-        record = self.get_by_id(record_id)
+            if not record:
+                return False
 
-        if not record:
-            return False
+            try:
+                db.delete(record)
+                db.commit()
+            except:
+                db.rollback()
+                raise
 
-        self.db.delete(record)
-        self.db.commit()
+            return True
 
-        return True
     def get_prompt_dependency(self, start_id: int):
-        query = text("EXEC dbo.sp_get_prompt_dependency :StartId")
-
-        result = self.db.execute(
-            query,
-            {"StartId": start_id}
-        )
-        rows = result.mappings().all()
-
-        return rows
+        with SessionLocal() as db:
+            try:
+                query = text("SELECT * FROM sp_get_prompt_dependency(:start_id)")
+                result = db.execute(query, {"start_id": start_id})
+                return result.mappings().all()
+            except Exception as e:
+                db.rollback()
+                raise e

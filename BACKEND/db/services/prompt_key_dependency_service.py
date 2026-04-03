@@ -64,3 +64,6 @@ class PromptKeyDependencyService:
     
     def get_all_by_parent_id(self,parent_id:int):
         return self.repo.get_all_by_parent_id(parent_id)
+
+
+prompt_key_dependency_service = PromptKeyDependencyService()

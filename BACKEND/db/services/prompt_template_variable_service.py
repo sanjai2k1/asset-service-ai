@@ -20,3 +20,5 @@ class PromptTemplateVariableService:
     def remove_variable(self, var_id: int):
         """Soft delete a variable"""
         return self.repository.soft_delete(var_id)
+
+prompt_template_variable_Service = PromptTemplateVariableService()

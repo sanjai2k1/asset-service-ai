@@ -1,12 +1,12 @@
 import time
-from db.services.prompt_key_dependency_service import PromptKeyDependencyService
+from db.services.prompt_key_dependency_service import prompt_key_dependency_service
 from db.cache.cache_provider import CacheProvider
 from core.enums import PromptkeyDependency
-
+from core.logging import logger
 class PromptDependencyCache:
     def __init__(self):
-        self.service = PromptKeyDependencyService()
-        self.cache = CacheProvider()
+        self.service = prompt_key_dependency_service
+        self.cache = CacheProvider
 
     def load(self, start_id: int):
         """
@@ -18,22 +18,18 @@ class PromptDependencyCache:
             if not data:
                 return []
 
-            # 🔑 Extract main key
             cache_key = data[0].get("prompt_key")
 
-            # Get existing group (or empty dict)
             existing = self.cache.get(cache_key) or {}
 
-            # ✅ Store by start_id
             existing[start_id] = data
 
-            # Save back
             self.cache.set(cache_key, existing)
 
             return data
 
         except Exception as e:
-            print(f"[ERROR] {e}")
+            logger.error(str(e),exc_info=True)
             return []
 
     # 👉 Allow direct usage: cache["SR_C"]

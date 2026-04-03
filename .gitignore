@@ -68,7 +68,7 @@ Thumbs.db
 # Python Build
 
 # -----------------------------
-
+build_output*
 build/
 dist/
 *.egg-info/

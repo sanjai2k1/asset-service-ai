@@ -10,14 +10,12 @@ type ProjectInfoCardProps = {
   projectName: string;
   projectIcon: React.ElementType;
   shortDescription: string;
-  services: ProjectService[];
 };
 
 export const ProjectInfoCard: React.FC<ProjectInfoCardProps> = ({
   projectName,
   projectIcon: Icon,
   shortDescription,
-  services,
 }) => {
   return (
     <Card className="flex flex-col w-full max-w-md mx-auto">

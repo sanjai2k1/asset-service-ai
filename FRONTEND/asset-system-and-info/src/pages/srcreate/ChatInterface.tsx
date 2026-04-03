@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useOptimistic, useRef, useEffect, useActionState, startTransition } from 'react';
+import { useState, useOptimistic, useRef, useEffect, startTransition } from 'react';
 import { Bot, User, Send, Loader2, Mic } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
-import { handleSrCreateChat } from './handleSrCreateChat';
 import { useToast } from '@/hooks/use-toast';
+import { v4 as uuidv4 } from "uuid";
+import { streamRequest } from '@/lib/api-client';
 
 type Message = {
   id: string;
@@ -18,35 +19,47 @@ type Message = {
 };
 
 type ChatState = {
-  thread_id? :string |null;
-    aiMessage: {
-      content: string;
-    } | null;
-    error: {
-      request?: string[];
-    } | null;
-    issrcreated : boolean |null ;
-  };
+  thread_id?: string | null;
+  aiMessage: {
+    content: string;
+  } | null;
+  error: {
+    request?: string[];
+  } | null;
+  issrcreated: boolean | null;
+};
 
 const initialState: ChatState = {
   aiMessage: null,
   error: null,
-  thread_id :null,
-  issrcreated : null
+  thread_id: null,
+  issrcreated: null
 };
 
+interface AskResponse {
+  thread_id?: string | null;
+  aiMessage: {
+    content: string;
+  };
+  issrcreated: boolean | null;
+}
+
 export function ChatInterface() {
-  const [state, formAction, isPending] = useActionState<ChatState, FormData>(handleSrCreateChat, initialState);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [state, setState] = useState<ChatState>(initialState);
+  const [isPending, setIsPending] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]); // ✅ FIXED
+  const [agentStatus, setAgentStatus] = useState<string | null>(null);
+
   const formRef = useRef<HTMLFormElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
   const [optimisticMessages, addOptimisticMessage] = useOptimistic<Message[], string>(
     messages,
     (currentMessages, newMessageContent) => [
       ...currentMessages,
       {
-        id: crypto.randomUUID(),
+        id: uuidv4(),
         role: 'user',
         content: newMessageContent,
         isOptimistic: true,
@@ -54,129 +67,160 @@ export function ChatInterface() {
     ]
   );
 
-  
   const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
-// Inside your ChatInterface component
-const recognitionRef = useRef<any>(null);
-
-
-const toggleListening = () => {
-  if (isListening) {
-    recognitionRef.current?.stop();
-    return;
-  }
-
-  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    alert('Speech recognition not supported in this browser.');
-    return;
-  }
-
-  const recognition = new SpeechRecognition();
-  recognition.lang = 'en-US';
-  recognition.interimResults = true;
-  recognition.continuous = true;
-
-  // Track the text that was already in the input before we started
-  let baseText = "";
-
-  recognition.onstart = () => {
-    setIsListening(true);
-    const input = formRef.current?.querySelector<HTMLInputElement>('input[name="request"]');
-    if (input) {
-      // If there's already text, add a space so the new words don't stick to it
-      baseText = input.value + (input.value ? ' ' : '');
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
     }
-  };
 
-  recognition.onresult = (event: any) => {
-    const input = formRef.current?.querySelector<HTMLInputElement>('input[name="request"]');
-    if (!input) return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Speech recognition not supported in this browser.');
+      return;
+    }
 
-    let interimTranscript = '';
-    let finalTranscript = '';
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = true;
+    recognition.continuous = true;
 
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript;
-      if (event.results[i].isFinal) {
-        finalTranscript += transcript;
-      } else {
-        interimTranscript += transcript;
+    let baseText = "";
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      const input = formRef.current?.querySelector<HTMLInputElement>('input[name="request"]');
+      if (input) {
+        baseText = input.value + (input.value ? ' ' : '');
       }
-    }
+    };
 
-    // Update the input: Original Text + what was just finalized + what is currently being said
-    input.value = baseText + finalTranscript + interimTranscript;
-    
-    // Update baseText if we got a final result so it stays persistent
-    if (finalTranscript) {
-       baseText += finalTranscript;
-    }
+    recognition.onresult = (event: any) => {
+      const input = formRef.current?.querySelector<HTMLInputElement>('input[name="request"]');
+      if (!input) return;
+
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      input.value = baseText + finalTranscript + interimTranscript;
+
+      if (finalTranscript) {
+        baseText += finalTranscript;
+      }
+    };
+
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
-  recognition.onerror = () => setIsListening(false);
-  recognition.onend = () => setIsListening(false);
+  useEffect(() => {
+    const el = scrollAreaRef.current;
+    if (!el) return;
+  
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [optimisticMessages]);
 
-  recognitionRef.current = recognition;
-  recognition.start();
-};
-useEffect(() => {
-    if (state?.aiMessage) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: state.aiMessage!.content,
-        },
-      ]);
-    }
-  }, [state]); // Runs whenever the action state changes
+  // ✅ keep toast logic
   useEffect(() => {
     if (state?.issrcreated) {
       toast({
         title: "Request Confirmed",
         description: "Your service request is now in the system.",
-        variant: "default", // or "destructive" if state.error exists
       });
     }
 
     if (state?.error) {
       toast({
-        variant: "destructive", // This triggers the red error styling
+        variant: "destructive",
         title: "Uh oh! Something went wrong.",
         description: "There was a problem with your request.",
       });
     }
-  }, [state?.issrcreated,state?.error, toast]);
-const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  }, [state?.issrcreated, state?.error, toast]);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const message = formData.get('request') as string;
   
     if (!message.trim() || isPending) return;
   
-    // 1. Clear the input immediately
     formRef.current?.reset();
   
-    // 2. Wrap in startTransition for useOptimistic to work
+    // optimistic UI
     startTransition(() => {
       addOptimisticMessage(message);
-      
-      // 3. Add the user message to permanent state so it stays 
-      // after the optimistic state clears
-      setMessages((prev) => [
-        ...prev, 
-        { id: crypto.randomUUID(), role: 'user', content: message }
-      ]);
   
-      // 4. Fire the action
-      formAction(formData);
+      setMessages((prev) => [
+        ...prev,
+        { id: uuidv4(), role: 'user', content: message }
+      ]);
     });
+  
+    setIsPending(true);
+    setAgentStatus("Starting..."); // optional initial state
+  
+    try {
+      await streamRequest<AskResponse>({
+        url: "srcreation/ask-stream",
+        data: { request: message, thread_id: state?.thread_id },
+  
+        onMessage: (data) => {
+          if (data.type === "progress") {
+            // 🔥 force immediate UI update
+            setAgentStatus(data.current_node);
+          }
+  
+          if (data.type === "final") {
+            // 🔥 stop loader ONLY here
+            setAgentStatus(null);
+            setIsPending(false);
+  
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: uuidv4(),
+                role: 'assistant',
+                content: data.aiMessage.content,
+              },
+            ]);
+  
+            setState((prev: any) => ({
+              ...prev,
+              thread_id: data.issrcreated ? null : data.thread_id,
+              issrcreated: data.issrcreated,
+              error: null
+            }));
+          }
+        },
+  
+        onError: () => {
+          setAgentStatus("Error...");
+          setIsPending(false);
+        }
+      });
+    } catch (err) {
+      setAgentStatus("Error...");
+      setIsPending(false);
+    }
   };
-
-
 
   return (
     <Card className="flex flex-col h-[calc(100vh-8rem)]">
@@ -185,7 +229,7 @@ const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
           <div className="flex h-full items-center justify-center">
             <div className="text-center p-8 bg-muted/50 rounded-lg">
               <Bot className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold text-foreground">Service Request  Assistant</h3>
+              <h3 className="text-lg font-semibold text-foreground">Service Request Assistant</h3>
               <p className="text-muted-foreground">Describe Issue Ai will analyze and create SR!</p>
             </div>
           </div>
@@ -206,6 +250,7 @@ const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
                   </AvatarFallback>
                 </Avatar>
               )}
+
               <div
                 className={cn(
                   'max-w-md rounded-lg px-4 py-3',
@@ -214,9 +259,9 @@ const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
                     : 'bg-muted text-muted-foreground rounded-bl-none'
                 )}
               >
-               
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
               </div>
+
               {message.role === 'user' && (
                 <Avatar className="w-8 h-8 border-2 border-muted">
                   <AvatarFallback>
@@ -227,22 +272,29 @@ const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
             </div>
           ))
         )}
-        {isPending && (
+
+        {(isPending || agentStatus) && (
           <div className="flex items-start gap-4 justify-start">
             <Avatar className="w-8 h-8 border-2 border-primary">
               <AvatarFallback className="bg-primary text-primary-foreground">
                 <Bot size={18} />
               </AvatarFallback>
             </Avatar>
-            <div className="max-w-md rounded-lg px-4 py-3 bg-muted text-muted-foreground rounded-bl-none flex items-center">
+
+            <div className="max-w-md rounded-lg px-4 py-3 bg-muted text-muted-foreground rounded-bl-none flex items-center gap-2">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <span className="text-sm">
+                {agentStatus || "Thinking..."}
+              </span>
             </div>
           </div>
         )}
       </div>
+
       <div className="border-t p-4 bg-background">
         <form ref={formRef} onSubmit={handleSubmit} className="flex items-center gap-2">
-        <input type="hidden" name="thread_id" value={state?.thread_id || ''} />
+          <input type="hidden" name="thread_id" value={state?.thread_id || ''} />
+
           <Input
             name="request"
             placeholder="Ask the AI something..."
@@ -250,29 +302,24 @@ const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
             disabled={isPending}
             className="flex-1"
           />
-        <Button 
-  type="button" 
-  size="icon" 
-  onClick={toggleListening} 
-  disabled={isPending}
-  className={cn(
-    "transition-all",
-    isListening ? "bg-red-500 hover:bg-red-600 animate-pulse ring-2 ring-red-200" : ""
-  )}
->
-  {isListening ? (
-    <Mic className="h-4 w-4 text-white" />
-  ) : (
-    <Mic className="h-4 w-4" />
-  )}
-</Button>
+
+          <Button
+            type="button"
+            size="icon"
+            onClick={toggleListening}
+            disabled={isPending}
+            className={cn(
+              "transition-all",
+              isListening ? "bg-red-500 hover:bg-red-600 animate-pulse ring-2 ring-red-200" : ""
+            )}
+          >
+            <Mic className="h-4 w-4" />
+          </Button>
+
           <Button type="submit" size="icon" disabled={isPending}>
             <Send className="h-4 w-4" />
           </Button>
         </form>
-        {/* {state?.error && (
-          <p className="text-sm text-destructive mt-2">{state.error.request}</p>
-        )} */}
       </div>
     </Card>
   );

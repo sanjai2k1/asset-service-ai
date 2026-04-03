@@ -1,10 +1,10 @@
-from db.services.prompt_key_dependency_service import PromptKeyDependencyService
+from db.services.prompt_key_dependency_service import prompt_key_dependency_service
 import asyncio
 
 class PromptDependencyService:
 
     def __init__(self):
-        self.prompt_key_dependency = PromptKeyDependencyService()
+        self.prompt_key_dependency = prompt_key_dependency_service
 
     # --- Create Dependency ---
     async def create_dependency(self, prompt_key_id: int, parent_id: int | None, is_parent: bool):

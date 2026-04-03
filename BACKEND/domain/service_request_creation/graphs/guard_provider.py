@@ -1,6 +1,6 @@
 from llm.utils.guardrails_utils import GuardrailsUtils
 from domain.service_request_creation.graphs.state_schemas import ClassificationResult,MandatoryExtractionResult,FinalSummary
-
+from core.logging import logger
 class SRGuardProvider:
     def __init__(self):
         self._classification_guard = GuardrailsUtils.create_guard(ClassificationResult)
@@ -18,13 +18,14 @@ class SRGuardProvider:
                 return GuardrailsUtils.map_to_schema(ClassificationResult,outcome.validated_output)
 
     
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(str(e) , exc_info=True)
+            
         
-        # 🔥 fallback (empty result)
         return ClassificationResult(
             service=None,
-            request_type=None
+            request_type=None,
+            clarification_question ="enter prompt again..."
         )
 
     def validate_mandatory_fields(self, llm_output: str) -> MandatoryExtractionResult:
@@ -37,11 +38,11 @@ class SRGuardProvider:
             if outcome.validation_passed:
                 return GuardrailsUtils.map_to_schema(MandatoryExtractionResult,outcome.validated_output)
     
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(str(e) , exc_info=True)
         
         # 🔥 fallback (empty result)
-        return MandatoryExtractionResult(
+        return MandatoryExtractionResult( clarification_question="Mandatory fields extraction failed..enter prompt again to validate.."
         )
     def validate_final_summary(self, llm_output: str) -> FinalSummary:
         try:
@@ -53,9 +54,9 @@ class SRGuardProvider:
             if outcome.validation_passed:
                 return GuardrailsUtils.map_to_schema(FinalSummary,outcome.validated_output)
     
-        except Exception:
-            pass
+        except Exception as e :
+            logger.error(str(e) , exc_info=True)
         
         # 🔥 fallback (empty result)
-        return FinalSummary( final_summary=""
+        return FinalSummary( final_summary="Final summary failed...enter prompt again.."
         )

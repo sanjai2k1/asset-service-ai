@@ -1,8 +1,8 @@
 from langgraph.graph import StateGraph
 from .state_schemas import State
-from llm.utils.check_pointer_util import CheckpointUtil
+from llm.utils.check_pointer_util import checkpoint_util
 from langchain_core.runnables import RunnableConfig
-from .graph_helper import build_service_classification_prompt,build_dict_for_mandator_fields,build_prompt_extarct_mandatory,build_prompt_final_summary
+from .graph_helper import build_service_classification_prompt,build_dict_for_mandator_fields,build_prompt_extarct_mandatory,build_prompt_final_summary,update_final_summary_to_db
 from llm.factory.llm_factory import LLMFactory
 from domain.service_request_creation.graphs.guard_provider import SRGuardProvider
 from langgraph.types import Command
@@ -29,7 +29,10 @@ def service_requesttype_classify_node(state: State, config: RunnableConfig):
         "service" : guard_result.service,
         "request_type" : guard_result.request_type,
         "is_mandatory_fields_complete" : False,
-        "messages": [
+        "current_node" : "Checking required details given...",
+        "user_reqs": (state.get("user_reqs") or []) + [request],
+
+        "messages": (state.get("messages") or []) +[
             {"role": "user",
              "content": prompt,
             "usage" : {
@@ -47,14 +50,17 @@ def service_requesttype_classify_node(state: State, config: RunnableConfig):
             }
         ]
     }
+
     if update["is_classification_complete"] and update["service"] is not None and update["request_type"] is not None:
         return Command(
             update=update,
             goto="mandatory_fields_extract_node"
         )
+    if guard_result.clarification_question:
+        update["prev_calrification_ques"] =[guard_result.clarification_question]
     return {
         **update,
-        "user_reqs": [request],
+        "current_node" : "Asking Clarification..."
 
     }
 
@@ -84,8 +90,9 @@ def mandatory_fields_extract_node(state: State, config: RunnableConfig):
         "is_mandatory_fields_complete" : guard_result.is_complete,
         "data" : guard_result.data,
         "missing_fields" : guard_result.missing_fields,
-        "user_reqs": [request],
-        "messages": [
+         "current_node" : "Creating a service request",
+
+        "messages":(state.get("messages") or []) + [
             {"role": "user",
              "content": prompt,
             "usage" : {
@@ -104,15 +111,18 @@ def mandatory_fields_extract_node(state: State, config: RunnableConfig):
         ]
     }
 
-    if update["is_mandatory_fields_complete"] and state["is_classification_complete"]:
+    if update["is_mandatory_fields_complete"] or guard_result.is_complete :
         return Command(
             update=update,
             goto="final_summary_node"
         )
-
+    if guard_result.clarification_question:
+        update["prev_calrification_ques"] =[guard_result.clarification_question]
     return {
-        **state,
-      **update
+      **update,
+        "current_node" : "Need Required data...",
+        "user_reqs": (state.get("user_reqs") or []) + [request]
+
     }
 
 @handle_node_errors
@@ -122,20 +132,45 @@ def router_node(state: State):
         and state.get("service")
         and state.get("request_type")
     ):
-        return Command(goto="mandatory_fields_extract_node")
+        return Command(update={**state} ,goto="mandatory_fields_extract_node")
 
-    return Command(goto="service_requesttype_classify_node")
+    return Command( update={**state}, goto="service_requesttype_classify_node")
 
 @handle_node_errors
 def final_summary_node(state : State):
     prompt = build_prompt_final_summary(state)
+
     chat_messages = [{"role": "user", "content": prompt}]
     llm_result = llm.generate(chat_messages=chat_messages)
     content_to_validate = llm_result.get("content","")
     guard_result = guard_provider.validate_final_summary(content_to_validate)
+    state["final_summary"]=  guard_result.final_summary
+    update_final_summary_to_db(state)
+
     return {
-        **state,
-        "final_summary" : guard_result.final_summary
+        "final_summary" :state["final_summary"],
+         "sr_request_id" : state["sr_request_id"],
+    "sr_doc_no" : state["sr_doc_no"],
+        
+        "current_node" : "Created SR..",
+         "messages":(state.get("messages") or []) + [
+            {"role": "user",
+             "content": prompt,
+            "usage" : {
+            "prompt_tokens": llm.count_tokens(prompt),
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "time_taken_sec": 0  
+
+        }
+             },
+            {
+                "role": "assistant",
+                "content": llm_result["content"],
+                "usage": llm_result["usage"]
+            }
+        ]
+
     }
 
 def build_graph():
@@ -147,6 +182,8 @@ def build_graph():
     graph.add_node("final_summary_node",final_summary_node)
     graph.set_entry_point("router_node")
 
-    return graph.compile(checkpointer=CheckpointUtil._checkpointer)
+    return graph
 
-
+def compile_graph():
+    graph = build_graph()
+    return graph.compile(checkpointer=checkpoint_util._checkpointer)

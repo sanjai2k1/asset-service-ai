@@ -1,6 +1,7 @@
 from .prompts  import SERVICE_CLASSIFICATION_PROMPT,EXTRACT_MANDATORY_FIELDS_PROMPT,FINAL_SUMMARY_PROMPT
 from core.enums import PromptkeyDependency,Promptkey
 from db.cache.prompt_cache import prompt_cache
+from db.services.service_request_service import service_request_service
 import json
 def build_table_for_services(cache_key: str, selected_ids: List[int]) -> str:
     cache_data = prompt_cache[cache_key]
@@ -49,12 +50,14 @@ def build_service_classification_prompt(state) -> str:
     request = state.get("request")
     service = state.get("service_type")
     request_type = state.get("request_type")
-    user_reqs = state.get("user_reqs") + [request]
+    user_reqs = state.get("user_reqs",[]) + [request]
+    prev_calrification_ques = state.get("prev_calrification_ques",[])
     services_reqstable = build_table_for_services(Promptkey.SR_CREATION, [PromptkeyDependency.FEMS, PromptkeyDependency.BEMS, PromptkeyDependency.CLS, PromptkeyDependency.LLS, PromptkeyDependency.HWMS])            
 
     prompt = SERVICE_CLASSIFICATION_PROMPT.format(
         request="\n".join(user_reqs),
-        services_and_reqtypes=services_reqstable 
+        services_and_reqtypes=services_reqstable ,
+        prev_calrification_ques = "\n".join(prev_calrification_ques)
     )
 
     return prompt
@@ -108,9 +111,15 @@ def get_required_fields_for_request_type(
         # 🔹 Step 5: Get actual fields
         for item in data:
             if item["parent_id"] == required_fields_parent_id:
-                required_fields[item["keyword"]]={}
-                required_fields[item["keyword"]][item["description"]] = item["uasge_description_dep"] if item["uasge_description_dep"] else ""
-    return required_fields
+                desc = item.get("description") or ""
+                usage = item.get("uasge_description_dep") or ""
+
+                # If both exist, join with dash; otherwise, just show what exists
+                if desc and usage:
+                    required_fields[item["keyword"]] = f"{desc} - {usage}"
+                else:
+                    required_fields[item["keyword"]] = desc or usage
+        return required_fields
 
 def build_dict_for_mandator_fields(found_service : str , found_request_type : str)-> dict:
     ans = get_required_fields_for_request_type(cache_key= Promptkey.SR_CREATION,selected_ids= [PromptkeyDependency.FEMS, PromptkeyDependency.BEMS, PromptkeyDependency.CLS, PromptkeyDependency.LLS, PromptkeyDependency.HWMS]
@@ -125,8 +134,9 @@ def build_prompt_extarct_mandatory(state)-> str:
         )
     if not mandatory_fields:
         return ""
-    user_reqs = state["user_reqs"]+[state["request"]]
-    prompt = EXTRACT_MANDATORY_FIELDS_PROMPT.format(mandatory_fields = json.dumps(mandatory_fields, indent=2) ,user_reqs = "\n".join(user_reqs))
+    user_reqs = state.get("user_reqs",[])+[state["request"]]
+    prev_calrification_ques = state.get("prev_calrification_ques",[])
+    prompt = EXTRACT_MANDATORY_FIELDS_PROMPT.format(mandatory_fields = json.dumps(mandatory_fields, indent=2) ,user_reqs = "\n".join(user_reqs),prev_calrification_ques="\n".join(prev_calrification_ques))
     return prompt
 
 
@@ -135,11 +145,22 @@ def build_prompt_final_summary(state)-> str:
     request_type = state["request_type"]
     data = state["data"]
     user_reqs = state["user_reqs"]
+    get_sr_no = service_request_service.create_service_request(service,request_type,data,None)
+    state["sr_request_id"] = get_sr_no.id
+    state["sr_doc_no"] = get_sr_no.document_number
+
     prompt = FINAL_SUMMARY_PROMPT.format(
         service = service,
         request_type = request_type,
         data = json.dumps(data,indent=2),
-        user_reqs = "\n".join(user_reqs)
+        user_reqs = "\n".join(user_reqs),
+        doc_no = state["sr_doc_no"]
         
         )
     return prompt
+
+def update_final_summary_to_db(state):
+    get_sr_no = service_request_service.update_service_request(state["sr_request_id"], None,None,None,state["final_summary"])
+    return state
+
+

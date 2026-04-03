@@ -1,5 +1,5 @@
 SERVICE_CLASSIFICATION_PROMPT = SERVICE_CLASSIFICATION_PROMPT = """
-You are an intelligent information extraction system. Your goal is to identify the user's requested service and request type from the conversation.
+You are an intelligent information extraction system. Your goal is to identify the user's requested service and request type from the conversation.you are also given previously asked clarification questions for this task.
 
 ------------------------
 USER REQUESTS:
@@ -8,6 +8,12 @@ USER REQUESTS:
 ------------------------
 AVAILABLE SERVICES AND REQUEST TYPES:
 {services_and_reqtypes}
+
+------------------------
+
+PREVIOUS CLARIFICATIONS ASKED IF ANY:
+
+{prev_calrification_ques}
 
 ------------------------
 INSTRUCTIONS:
@@ -41,12 +47,15 @@ RULES:
 """
 
 MANDATORY_FIELDS_PROMPT = """
-you are an agent that analyzes user querys and extract data .you are given with collection of user prompts . i also given field and its description.
+you are an agent that analyzes user querys and extract data .you are given with collection of user prompts . i also given field and its description..you are also given previously asked clarification questions for this task.
 Field to search : {extarct_field}
 Field Description : {extarct_field_description}
 --------------
 User Prompts : {user_data}
 ------------
+PREVIOUS CLARIFICATIONS ASKED IF ANY:
+{prev_calrification_ques}
+------------------------
 Rules:
 - Analyze the above user prompts. Extract the  fields from user prompt.
 - If field missing politely ask user.
@@ -84,6 +93,7 @@ FINAL_SUMMARY_PROMPT = """You are a professional Service Desk Coordinator. Your 
 - Service: {service}
 - Request Type: {request_type}
 - Collected Fields: {data}
+- Generated Document Number : {doc_no}
 - User Conversations: {user_reqs}
 
 ### INSTRUCTIONS:
@@ -93,8 +103,9 @@ FINAL_SUMMARY_PROMPT = """You are a professional Service Desk Coordinator. Your 
 4. STRUCTURE: 
    - Start by confirming the creation of the request.
    - Explicitly mention the Service and Request Type.
-   - Detail the specific information gathered in the "Collected Fields".
+   - Detail the specific information gathered in the "Collected Fields".if collected fields was empty don't talk about it.
    - Briefly incorporate the context from the user's initial prompts.
+   - Mention genearted document number as reference number
 5. Avoid sounding like a passive observer. Instead of saying "The user said hi," synthesize the interaction into a statement of action (e.g., "Based on your request...").
 
 ### OUTPUT FORMAT:
@@ -108,7 +119,7 @@ You MUST return a valid JSON object only. Do not include any conversational fill
 EXTRACT_MANDATORY_FIELDS_PROMPT = """
 You are an intelligent information extraction system.
 
-Your task is to extract required structured fields from the conversation.
+Your task is to extract required structured fields from the conversation..you are also given previously asked clarification questions for this task
 
 ------------------------
 MANDATORY FIELDS:
@@ -117,6 +128,10 @@ MANDATORY FIELDS:
 ------------------------
 USER CONVERSATION:
 {user_reqs}
+
+------------------------
+PREVIOUS CLARIFICATIONS ASKED IF ANY:
+{prev_calrification_ques}
 
 ------------------------
 INSTRUCTIONS:

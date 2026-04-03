@@ -1,4 +1,4 @@
-import { type LucideIcon,MessageCircle, Folder } from "lucide-react";
+import { type LucideIcon,MessageCircle, Folder ,FileSpreadsheet} from "lucide-react";
 
 export type Project = {
   id: string;
@@ -18,4 +18,13 @@ export const projects: Project[] = [
     pathUrl : "srcreate",
     linkText:"Create a SR"
   },
+  {
+    id: "2",
+    name: "Excel Analysis helper",
+    shortDescription: "Analyze excel based on user need",
+    icon: FileSpreadsheet,
+    pathUrl : "analyze-excel",
+    linkText:"Start Analysis"
+  },
+  
 ];

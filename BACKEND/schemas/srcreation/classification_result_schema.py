@@ -78,3 +78,13 @@ class AskRequest(BaseModel):
     thread_id: Optional[str] = None
     request: str
 
+class GetSRRecordsRequest(BaseModel):
+    limit: int = Field(default=10, ge=1, description="Number of records to fetch")
+    offset: int = Field(default=0, ge=0, description="Number of records to skip")
+    service: Optional[str] = Field(default=None, description="Filter by service")
+    request_type: Optional[str] = Field(default=None, description="Filter by request type")
+
+
+class GetSRRecordsResponse(BaseModel):
+    total_count: int
+    records: List[dict]  # or create a Pydantic model for ServiceRequest if you want strict typing

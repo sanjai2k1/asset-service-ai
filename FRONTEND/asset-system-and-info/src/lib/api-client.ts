@@ -58,6 +58,89 @@ export async function request<T>(config: AxiosRequestConfig): Promise<ApiResult<
       raw: backendError
     };
   }
+}export async function streamRequest<T = any>({
+  url,
+  method = 'POST',
+  data,
+  onMessage,
+  onError,
+}: {
+  url: string;
+  method?: 'POST' | 'GET';
+  data?: any;
+  onMessage?: (chunk: any) => void;
+  onError?: (err: any) => void;
+}): Promise<ApiResult<T>> {
+  try {
+    const response = await fetch(getBaseURL() + url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: method === 'POST' ? JSON.stringify(data) : undefined,
+    });
+
+    if (!response.body) {
+      throw new Error('Streaming not supported in this browser');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    let buffer = '';
+    let finalData: T | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        try {
+          const parsed = JSON.parse(trimmed);
+
+          // ✅ emit ALL events immediately
+          onMessage?.(parsed);
+
+          // ✅ store final separately
+          if (parsed.type === 'final') {
+            finalData = parsed as T;
+          }
+
+        } catch (err) {
+          console.warn('Failed to parse stream chunk:', trimmed);
+        }
+      }
+    }
+
+    if (finalData) {
+      return {
+        success: true,
+        data: finalData,
+        status: 200,
+      };
+    }
+
+    throw new Error('No final response received');
+
+  } catch (err: any) {
+    console.error('Streaming error:', err);
+
+    onError?.(err);
+
+    return {
+      success: false,
+      error: err.message || 'Streaming failed',
+      status: 500,
+    };
+  }
 }
 
 export default api;

@@ -1,12 +1,12 @@
 import asyncio
 from sqlalchemy import text
 from db.session import engine
-from db.services.prompt_template_variable_service import PromptTemplateVariableService
+from db.services.prompt_template_variable_service import prompt_template_variable_Service
 
 class PromptVarsService:
     def __init__(self):
         # Initialize services here
-        self.prompt_service = PromptTemplateVariableService()
+        self.prompt_service = prompt_template_variable_Service
 
 
     # --- Prompt Template Variables ---

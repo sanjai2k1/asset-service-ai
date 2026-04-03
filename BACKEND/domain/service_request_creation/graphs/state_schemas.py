@@ -2,20 +2,23 @@ from typing import TypedDict, Optional,Annotated,List,Dict
 from operator import add
 from pydantic import BaseModel, Field
 class State(TypedDict, total=False):
-    user_reqs: Annotated[List[str], add]
+    user_reqs:  List[str]
+    prev_calrification_ques :  List[str]
     service_type: Optional[str]
     request_type: Optional[str]
     thread_id : Optional[str]
     final_summary : Optional[str]
-
+    current_node : str 
     request : str
     service : Optional[str]
     clarification_question: Optional[str] = None
     is_classification_complete : bool = False
     is_mandatory_fields_complete : bool = False
-    messages: Annotated[List[Dict], add]
+    messages: List[Dict]
     data: Dict[str, Optional[str]] = {}
     missing_fields: List[str] = []
+    sr_request_id : Optional[str]
+    sr_doc_no : Optional[str]
 class ClassificationResult(BaseModel):
     service: Optional[str] = None
     request_type: Optional[str] = None
